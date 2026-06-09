@@ -20,21 +20,5 @@ test:
   database: mangaverse_test
 
 production:
-  primary:
-    <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
-  cache:
-    <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
-    database: mangaverse_production_cache
-    migrations_paths: db/cache_migrate
-  queue:
-    <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
-    database: mangaverse_production_queue
-    migrations_paths: db/queue_migrate
-  cable:
-    <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
-    database: mangaverse_production_cable
-    migrations_paths: db/cable_migrate
+  <<: *default
+  url: <%= ENV["DATABASE_URL"] %>
