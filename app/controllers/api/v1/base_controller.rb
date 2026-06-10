@@ -1,12 +1,23 @@
 module Api
   module V1
     class BaseController < ActionController::API
+      # Permite renderizar templates .json.jbuilder dentro de ActionController::API
+      include ActionView::Layouts
+      include ActionView::Rendering
+
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
+      rescue_from StandardError, with: :internal_server_error
 
       private
 
       def not_found
         render json: { error: "Not found" }, status: :not_found
+      end
+
+      def internal_server_error(exception)
+        Rails.logger.error("[API] Erro interno: #{exception.class} — #{exception.message}")
+        Rails.logger.error(exception.backtrace&.first(5)&.join("\n"))
+        render json: { error: "Erro interno no servidor" }, status: :internal_server_error
       end
 
       def cover_url_for(attachment)
