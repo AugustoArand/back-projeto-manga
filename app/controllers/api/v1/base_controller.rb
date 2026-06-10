@@ -1,10 +1,6 @@
 module Api
   module V1
     class BaseController < ActionController::API
-      # Permite renderizar templates .json.jbuilder dentro de ActionController::API
-      include ActionView::Layouts
-      include ActionView::Rendering
-
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from StandardError, with: :internal_server_error
 
