@@ -1,24 +1,22 @@
 # PostgreSQL. Versions 12.0 and up are supported.
-#   gem install pg
-#
-#   Ensure the PostgreSQL gem is defined in your Gemfile
-#   gem "pg"
 #
 default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  username: <%= ENV.fetch("DB_USERNAME", "usuario") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "") %>
 
 development:
   <<: *default
   database: mangaverse_development
+  username: <%= ENV.fetch("DB_USERNAME", "usuario") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "") %>
 
 test:
   <<: *default
   database: mangaverse_test
+  username: <%= ENV.fetch("DB_USERNAME", "usuario") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "") %>
 
 production:
-  <<: *default
   url: <%= ENV["DATABASE_URL"] %>
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>

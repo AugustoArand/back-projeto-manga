@@ -1,8 +1,13 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
+# Railway pode usar RAILWAY_MASTER_KEY — garantir que RAILS_MASTER_KEY esteja definido
+if [ -z "$RAILS_MASTER_KEY" ] && [ -n "$RAILWAY_MASTER_KEY" ]; then
+  export RAILS_MASTER_KEY="$RAILWAY_MASTER_KEY"
+fi
+
+# Se rodando o servidor Rails, criar/migrar banco de dados
 if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
-  ./bin/rails db:prepare
+  ./bin/rails db:prepare || echo "[entrypoint] AVISO: db:prepare falhou, continuando boot..."
 fi
 
 exec "${@}"
