@@ -15,6 +15,7 @@ json.latest @latest do |ch|
   json.published_at ch[:published_at]
   json.manga_id    ch[:manga_id]
   json.manga_title ch[:manga_title]
+  json.cover_url   ch[:cover_url]
   json.pages       ch[:pages]
 end
 

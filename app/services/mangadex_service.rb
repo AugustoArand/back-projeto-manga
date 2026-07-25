@@ -41,7 +41,7 @@ class MangadexService
           "includes[]" => %w[manga scanlation_group]
         }
         data = get("/chapter", params)
-        parse_chapter_list(data)
+        attach_cover_urls(parse_chapter_list(data))
       end
     rescue => e
       Rails.logger.error("[MangaDex] latest_chapters error: #{e.message}")
@@ -399,6 +399,31 @@ class MangadexService
           group_name: group_rel&.dig("attributes", "name")
         }
       end.compact
+    end
+
+    # O endpoint /chapter não aceita includes[]=cover_art (capas só existem
+    # na relação com o manga), então buscamos as capas dos mangás únicos da
+    # lista em uma única chamada a /cover — evita N+1 requests à MangaDex.
+    def attach_cover_urls(chapters)
+      manga_ids = chapters.map { |c| c[:manga_id] }.compact.uniq
+      return chapters if manga_ids.empty?
+
+      covers = get("/cover", { "manga[]" => manga_ids, "limit" => manga_ids.size })
+      return chapters unless covers && covers["data"]
+
+      filename_by_manga = {}
+      covers["data"].each do |cover|
+        manga_rel = (cover["relationships"] || []).find { |r| r["type"] == "manga" }
+        manga_id  = manga_rel&.dig("id")
+        next unless manga_id
+        filename_by_manga[manga_id] ||= cover.dig("attributes", "fileName")
+      end
+
+      chapters.each do |c|
+        filename = filename_by_manga[c[:manga_id]]
+        c[:cover_url] = cover_url(c[:manga_id], filename) if filename
+      end
+      chapters
     end
 
     def dig_localized(hash)
