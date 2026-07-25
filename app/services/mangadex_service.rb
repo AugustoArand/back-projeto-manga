@@ -6,6 +6,11 @@ class MangadexService
   BASE_URL = "https://api.mangadex.org".freeze
   COVER_BASE = "https://uploads.mangadex.org/covers".freeze
   CACHE_TTL = 15.minutes
+  # MD@Home nodes are load-balanced and can be assigned an unhealthy/offline
+  # server at any time. Keep this short so a bad assignment self-heals fast,
+  # and always support bypassing it via `refresh:` when the client detects
+  # image load failures.
+  PAGES_CACHE_TTL = 3.minutes
 
   class << self
     # ── Mangás populares (por followedCount) ──
@@ -186,8 +191,10 @@ class MangadexService
     end
 
     # ── Páginas de um capítulo via at-home server ──
-    def chapter_pages(chapter_id, data_saver: false)
-      Rails.cache.fetch("mangadex:pages:#{chapter_id}:#{data_saver}", expires_in: CACHE_TTL) do
+    # `refresh: true` ignora o cache e força uma nova atribuição de nó
+    # MD@Home — usado quando o cliente detecta falha ao carregar imagens.
+    def chapter_pages(chapter_id, data_saver: false, refresh: false)
+      Rails.cache.fetch("mangadex:pages:#{chapter_id}:#{data_saver}", expires_in: PAGES_CACHE_TTL, force: refresh) do
         server_data = get("/at-home/server/#{chapter_id}", {})
         return nil unless server_data && server_data["baseUrl"]
 

@@ -47,10 +47,12 @@ module Api
 
       # GET /api/v1/mdex/chapter/:id
       # Returns ordered page image URLs for a MangaDex chapter.
-      # Accepts ?data_saver=true for compressed images.
+      # Accepts ?data_saver=true for compressed images and ?refresh=true to
+      # bypass the cache and request a fresh MD@Home node assignment.
       def chapter
         data_saver = params[:data_saver] == "true"
-        result     = MangadexService.chapter_pages(params[:id], data_saver: data_saver)
+        refresh    = params[:refresh] == "true"
+        result     = MangadexService.chapter_pages(params[:id], data_saver: data_saver, refresh: refresh)
 
         return render json: { error: "Chapter not found" }, status: :not_found unless result
 

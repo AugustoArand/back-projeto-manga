@@ -46,6 +46,10 @@ gem "google-cloud-storage", "~> 1.44", require: false
 # CORS para o app mobile (Expo/React Native)
 gem "rack-cors"
 
+# Rate limiting — protege o backend de abuso e evita estourar o rate limit
+# próprio da MangaDex (todo o tráfego proxy sai pelo mesmo IP do servidor)
+gem "rack-attack"
+
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
