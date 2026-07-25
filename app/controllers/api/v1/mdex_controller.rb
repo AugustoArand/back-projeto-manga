@@ -4,14 +4,14 @@ module Api
     # These are read-only and do not require authentication.
     class MdexController < BaseController
       # GET /api/v1/mdex/manga/:id
-      # Returns manga detail + paginated chapter list from MangaDex.
+      # Returns manga detail + full chapter list from MangaDex (in the given
+      # language). The client is responsible for paginating the display.
       def manga
         manga = MangadexService.manga_detail(params[:id])
         return render json: { error: "Manga not found" }, status: :not_found unless manga
 
-        lang   = params.fetch(:lang, "pt-br")
-        offset = params.fetch(:offset, 0).to_i
-        chapters = MangadexService.manga_chapters(params[:id], lang: lang, offset: offset)
+        lang     = params.fetch(:lang, "pt-br")
+        chapters = MangadexService.manga_chapters(params[:id], lang: lang)
 
         render json: {
           id:           manga[:id],

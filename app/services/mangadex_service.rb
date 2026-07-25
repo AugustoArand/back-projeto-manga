@@ -6,11 +6,19 @@ class MangadexService
   BASE_URL = "https://api.mangadex.org".freeze
   COVER_BASE = "https://uploads.mangadex.org/covers".freeze
   CACHE_TTL = 15.minutes
+  LATEST_CACHE_TTL = 5.minutes
   # MD@Home nodes are load-balanced and can be assigned an unhealthy/offline
   # server at any time. Keep this short so a bad assignment self-heals fast,
   # and always support bypassing it via `refresh:` when the client detects
   # image load failures.
   PAGES_CACHE_TTL = 3.minutes
+  # Teto de segurança para a paginação interna de manga_chapters — evita loop
+  # indefinido caso a API do MangaDex devolva um `total` inconsistente.
+  MAX_CHAPTERS_FETCH = 2000
+  CHAPTERS_PAGE_SIZE = 500
+  # Teto de segurança equivalente para a paginação de /cover em attach_cover_urls.
+  MAX_COVER_FETCH = 500
+  COVER_FETCH_PAGE_SIZE = 100
 
   class << self
     # ── Mangás populares (por followedCount) ──
@@ -32,8 +40,9 @@ class MangadexService
     end
 
     # ── Últimos lançamentos (capítulos recentes) ──
+    # TTL mais curto que o resto — essa seção precisa parecer viva.
     def latest_chapters(limit: 15, lang: "pt-br")
-      Rails.cache.fetch("mangadex:latest:#{limit}:#{lang}", expires_in: CACHE_TTL) do
+      Rails.cache.fetch("mangadex:latest:#{limit}:#{lang}", expires_in: LATEST_CACHE_TTL) do
         params = {
           "limit" => limit,
           "order[publishAt]" => "desc",
@@ -157,33 +166,52 @@ class MangadexService
     end
 
     # ── Capítulos de um mangá (MangaDex) ──
-    def manga_chapters(manga_id, limit: 100, lang: "pt-br", offset: 0)
-      Rails.cache.fetch("mangadex:chapters:#{manga_id}:#{lang}:#{offset}", expires_in: CACHE_TTL) do
-        params = {
-          "limit"                  => limit,
-          "offset"                 => offset,
-          "translatedLanguage[]"   => lang,
-          "order[chapter]"         => "asc",
-          "includes[]"             => "scanlation_group",
-          "contentRating[]"        => %w[safe suggestive erotica pornographic]
-        }
-        data = get("/manga/#{manga_id}/feed", params)
-        return [] unless data && data["data"]
+    # Busca TODOS os capítulos do idioma pedido, paginando internamente contra
+    # o feed do MangaDex (que limita a 500 por request) até bater o `total`
+    # informado pela própria API ou o teto de segurança MAX_CHAPTERS_FETCH.
+    # A paginação de exibição (50 por vez) é responsabilidade do cliente —
+    # aqui sempre devolvemos a lista completa para não quebrar prev/next no
+    # leitor de capítulos, que depende de ter todos os capítulos em memória.
+    def manga_chapters(manga_id, lang: "pt-br")
+      Rails.cache.fetch("mangadex:chapters:#{manga_id}:#{lang}", expires_in: CACHE_TTL) do
+        chapters = []
+        offset   = 0
+        total    = nil
 
-        data["data"].map do |ch|
-          attrs = ch["attributes"] || {}
-          group = (ch["relationships"] || []).find { |r| r["type"] == "scanlation_group" }
-          {
-            id:         ch["id"],
-            chapter:    attrs["chapter"],
-            title:      attrs["title"],
-            volume:     attrs["volume"],
-            pages:      attrs["pages"],
-            lang:       attrs["translatedLanguage"],
-            published:  attrs["publishAt"],
-            group:      group&.dig("attributes", "name")
+        loop do
+          params = {
+            "limit"                  => CHAPTERS_PAGE_SIZE,
+            "offset"                 => offset,
+            "translatedLanguage[]"   => lang,
+            "order[chapter]"         => "asc",
+            "includes[]"             => "scanlation_group",
+            "contentRating[]"        => %w[safe suggestive erotica pornographic]
           }
+          data = get("/manga/#{manga_id}/feed", params)
+          break unless data && data["data"]
+
+          total ||= data["total"].to_i
+          page = data["data"].map do |ch|
+            attrs = ch["attributes"] || {}
+            group = (ch["relationships"] || []).find { |r| r["type"] == "scanlation_group" }
+            {
+              id:         ch["id"],
+              chapter:    attrs["chapter"],
+              title:      attrs["title"],
+              volume:     attrs["volume"],
+              pages:      attrs["pages"],
+              lang:       attrs["translatedLanguage"],
+              published:  attrs["publishAt"],
+              group:      group&.dig("attributes", "name")
+            }
+          end
+          chapters.concat(page)
+
+          offset += CHAPTERS_PAGE_SIZE
+          break if page.empty? || chapters.size >= total || chapters.size >= MAX_CHAPTERS_FETCH
         end
+
+        chapters
       end
     rescue => e
       Rails.logger.error("[MangaDex] manga_chapters error: #{e.message}")
@@ -404,19 +432,40 @@ class MangadexService
     # O endpoint /chapter não aceita includes[]=cover_art (capas só existem
     # na relação com o manga), então buscamos as capas dos mangás únicos da
     # lista em uma única chamada a /cover — evita N+1 requests à MangaDex.
+    #
+    # IMPORTANTE: /cover devolve uma linha por capa (cada mangá pode ter
+    # várias — uma por volume/idioma), não uma por mangá. Usar
+    # `limit: manga_ids.size` (como antes) sub-buscava sempre que algum
+    # mangá do lote tivesse mais de uma capa cadastrada — o que é a norma
+    # para qualquer série com múltiplos volumes — deixando mangás populares
+    # (ex.: Chainsaw Man) sem cover_url por terem "perdido a vaga" para as
+    # várias capas de outro mangá do mesmo lote. Por isso paginamos até
+    # achar uma capa para cada mangá pedido (ou esgotar o total/teto).
     def attach_cover_urls(chapters)
       manga_ids = chapters.map { |c| c[:manga_id] }.compact.uniq
       return chapters if manga_ids.empty?
 
-      covers = get("/cover", { "manga[]" => manga_ids, "limit" => manga_ids.size })
-      return chapters unless covers && covers["data"]
-
       filename_by_manga = {}
-      covers["data"].each do |cover|
-        manga_rel = (cover["relationships"] || []).find { |r| r["type"] == "manga" }
-        manga_id  = manga_rel&.dig("id")
-        next unless manga_id
-        filename_by_manga[manga_id] ||= cover.dig("attributes", "fileName")
+      offset = 0
+      total  = nil
+
+      loop do
+        covers = get("/cover", { "manga[]" => manga_ids, "limit" => COVER_FETCH_PAGE_SIZE, "offset" => offset })
+        break unless covers && covers["data"]
+
+        total ||= covers["total"].to_i
+        covers["data"].each do |cover|
+          manga_rel = (cover["relationships"] || []).find { |r| r["type"] == "manga" }
+          manga_id  = manga_rel&.dig("id")
+          next unless manga_id
+          filename_by_manga[manga_id] ||= cover.dig("attributes", "fileName")
+        end
+
+        offset += COVER_FETCH_PAGE_SIZE
+        break if covers["data"].empty? ||
+                 filename_by_manga.size >= manga_ids.size ||
+                 offset >= total ||
+                 offset >= MAX_COVER_FETCH
       end
 
       chapters.each do |c|
