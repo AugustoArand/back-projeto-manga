@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_10_212449) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_26_010100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -52,6 +52,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_10_212449) do
     t.index ["manga_id"], name: "index_chapters_on_manga_id"
   end
 
+  create_table "favorites", force: :cascade do |t|
+    t.string "cover_url"
+    t.datetime "created_at", null: false
+    t.string "genre"
+    t.bigint "manga_id"
+    t.string "mangadex_id"
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["manga_id"], name: "index_favorites_on_manga_id"
+    t.index ["user_id", "manga_id"], name: "index_favorites_on_user_id_and_manga_id", unique: true
+    t.index ["user_id", "mangadex_id"], name: "index_favorites_on_user_id_and_mangadex_id", unique: true
+    t.index ["user_id"], name: "index_favorites_on_user_id"
+  end
+
   create_table "mangas", force: :cascade do |t|
     t.string "author"
     t.datetime "created_at", null: false
@@ -72,15 +87,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_10_212449) do
   end
 
   create_table "reading_histories", force: :cascade do |t|
+    t.bigint "chapter_id"
+    t.string "chapter_label"
     t.string "cover_url"
     t.datetime "created_at", null: false
     t.string "genre"
     t.integer "manga_id"
+    t.string "mangadex_chapter_id"
     t.string "mangadex_id"
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.bigint "user_id"
+    t.index ["chapter_id"], name: "index_reading_histories_on_chapter_id"
     t.index ["manga_id"], name: "index_reading_histories_on_manga_id"
     t.index ["mangadex_id"], name: "index_reading_histories_on_mangadex_id"
+    t.index ["user_id"], name: "index_reading_histories_on_user_id"
   end
 
   create_table "user_sessions", force: :cascade do |t|
@@ -112,7 +133,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_10_212449) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "chapters", "mangas"
+  add_foreign_key "favorites", "mangas"
+  add_foreign_key "favorites", "users"
   add_foreign_key "pages", "chapters"
+  add_foreign_key "reading_histories", "chapters"
   add_foreign_key "reading_histories", "mangas"
+  add_foreign_key "reading_histories", "users"
   add_foreign_key "user_sessions", "users"
 end

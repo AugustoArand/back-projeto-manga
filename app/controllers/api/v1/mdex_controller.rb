@@ -1,8 +1,12 @@
 module Api
   module V1
     # Proxy endpoints for MangaDex content (manga detail + chapter reading).
-    # These are read-only and do not require authentication.
+    # `manga`/`search` stay open (pure catalog browsing). `chapter` actually
+    # delivers reading content, so it requires a logged-in user with an
+    # active trial or VIP subscription.
     class MdexController < BaseController
+      before_action :authenticate_user!, :require_active_access!, only: :chapter
+
       # GET /api/v1/mdex/manga/:id
       # Returns manga detail + full chapter list from MangaDex (in the given
       # language). The client is responsible for paginating the display.

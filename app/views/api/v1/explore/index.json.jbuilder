@@ -25,13 +25,24 @@ json.categories @categories do |tag|
 end
 
 json.history @history do |h|
-  json.id          h.id
-  json.title       h.title
-  json.cover_url   h.cover_url
-  json.genre       h.genre
-  json.manga_id    h.manga_id
-  json.mangadex_id h.mangadex_id
-  json.updated_at  h.updated_at
+  json.id                  h.id
+  json.title               h.title
+  json.cover_url           h.cover_url
+  json.genre               h.genre
+  json.manga_id            h.manga_id
+  json.mangadex_id         h.mangadex_id
+  json.chapter_label       h.chapter_label
+  json.mangadex_chapter_id h.mangadex_chapter_id
+  json.updated_at          h.updated_at
+end
+
+json.favorites @favorites do |f|
+  json.id          f.id
+  json.title       f.title
+  json.cover_url   f.cover_url
+  json.genre       f.genre
+  json.manga_id    f.manga_id
+  json.mangadex_id f.mangadex_id
 end
 
 json.recommendations @recommendations do |manga|

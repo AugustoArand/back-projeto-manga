@@ -46,6 +46,14 @@ module Api
       def unauthorized!
         render json: { error: "Autenticação necessária" }, status: :unauthorized
       end
+
+      # ── Gate de teste grátis / assinatura ────────────────────────────────────
+      # Só usado nas ações que efetivamente entregam conteúdo de leitura
+      # (páginas de capítulo) — precisa rodar depois de authenticate_user!.
+      def require_active_access!
+        return if current_user&.access_active?
+        render json: { error: "trial_expired" }, status: :payment_required
+      end
     end
   end
 end

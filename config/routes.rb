@@ -25,6 +25,9 @@ Rails.application.routes.draw do
       end
 
       resources :reading_histories, only: [ :index, :create ]
+      resources :favorites, only: [ :index, :create, :destroy ]
+
+      post "plans/subscribe", to: "plans#subscribe"
 
       # Usuários MangaVerse
       post  "users/register",       to: "users#register"
